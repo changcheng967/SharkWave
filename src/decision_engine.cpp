@@ -160,6 +160,9 @@ Decision DecisionEngine::decideFlop() {
     double equity = HandEvaluator::calculateEquity(session_.heroCards(), session_.board(), 500);
     double potOdds = session_.potOdds();
 
+    // Format equity percentage for display
+    std::string equityStr = std::format("{:.1f}%", equity * 100.0);
+
     // Check if we're facing a bet
     if (session_.toCall() > 0) {
         int64_t callAmt = session_.toCall();
@@ -167,9 +170,9 @@ Decision DecisionEngine::decideFlop() {
         // We have a made hand
         if (hand.rank >= HandRank::TwoPair) {
             if (hand.rank >= HandRank::Straight || equity > 0.8) {
-                return Decision::raise(callAmt * 2, "Strong hand. Raise for value");
+                return Decision::raise(callAmt * 2, std::format("Strong hand ({} equity). Raise for value", equityStr));
             }
-            return Decision::call(callAmt, "Good made hand. Call for value");
+            return Decision::call(callAmt, std::format("Good made hand ({} equity). Call for value", equityStr));
         }
 
         // We have a draw
@@ -177,9 +180,9 @@ Decision DecisionEngine::decideFlop() {
         if (outs >= 8) { // Strong draw
             if (equity > potOdds || equity > 0.35) {
                 if (HandEvaluator::hasFlushDraw(session_.heroCards(), session_.board())) {
-                    return Decision::call(callAmt, "Flush draw. Call with good odds");
+                    return Decision::call(callAmt, std::format("Flush draw ({} equity). Call with good odds", equityStr));
                 }
-                return Decision::call(callAmt, std::format("Strong draw ({} outs). Call.", outs));
+                return Decision::call(callAmt, std::format("Strong draw ({} outs, {} equity). Call.", outs, equityStr));
             }
         }
 
@@ -187,13 +190,13 @@ Decision DecisionEngine::decideFlop() {
         if (equity < 0.25) {
             // Maybe bluff catch if pot odds good
             if (potOdds < 0.2) {
-                return Decision::call(callAmt, "Bluff catch with good pot odds");
+                return Decision::call(callAmt, std::format("Bluff catch ({} equity) with good pot odds", equityStr));
             }
-            return Decision::fold("Weak hand. Fold to bet");
+            return Decision::fold(std::format("Weak hand ({} equity). Fold to bet", equityStr));
         }
 
         // Marginal hand
-        return Decision::call(callAmt, "Marginal hand. Call to see turn");
+        return Decision::call(callAmt, std::format("Marginal hand ({} equity). Call to see turn", equityStr));
     }
 
     // We're first to act or checked to
@@ -202,7 +205,7 @@ Decision DecisionEngine::decideFlop() {
     // Value betting
     if (equity > 0.7 && hand.rank >= HandRank::OnePair) {
         int64_t betSize = getValueBetSize();
-        return Decision::bet(betSize, "Value bet with strong hand");
+        return Decision::bet(betSize, std::format("Value bet with strong hand ({} equity)", equityStr));
     }
 
     // Adjust c-bet frequency based on board texture
@@ -224,12 +227,12 @@ Decision DecisionEngine::decideFlop() {
     if (outs >= 8) {
         if (texture == BoardTexture::Dry) {
             int64_t betSize = getCBetSize();
-            return Decision::bet(betSize, std::format("Semi-bluff with {} outs. Good fold equity on dry board.", outs));
+            return Decision::bet(betSize, std::format("Semi-bluff with {} outs ({} equity). Good fold equity on dry board.", outs, equityStr));
         }
         // On wet boards, still semi-bluff with strong draws
         if (outs >= 10) {
             int64_t betSize = getCBetSize();
-            return Decision::bet(betSize, std::format("Semi-bluff with {} outs on wet board", outs));
+            return Decision::bet(betSize, std::format("Semi-bluff with {} outs ({} equity) on wet board", outs, equityStr));
         }
     }
 
@@ -237,19 +240,19 @@ Decision DecisionEngine::decideFlop() {
     if (shouldCBet) {
         int64_t betSize = getCBetSize();
         if (texture == BoardTexture::Dry) {
-            return Decision::bet(betSize, "C-bet on dry board. Good fold equity.");
+            return Decision::bet(betSize, std::format("C-bet on dry board ({} equity). Good fold equity.", equityStr));
         }
         if (texture == BoardTexture::Wet || texture == BoardTexture::VeryWet) {
-            return Decision::bet(betSize, "C-bet on wet board with showdown value");
+            return Decision::bet(betSize, std::format("C-bet on wet board ({} equity) with showdown value", equityStr));
         }
-        return Decision::bet(betSize, "Value c-bet with decent hand");
+        return Decision::bet(betSize, std::format("Value c-bet ({} equity) with decent hand", equityStr));
     }
 
     // Check with weak hand - more checking on wet boards
     if (texture == BoardTexture::Wet || texture == BoardTexture::VeryWet) {
-        return Decision::check("Check on wet board. Pot control with marginal hand.");
+        return Decision::check(std::format("Check on wet board ({} equity). Pot control with marginal hand.", equityStr));
     }
-    return Decision::check("Check with weak hand. Control pot size");
+    return Decision::check(std::format("Check with weak hand ({} equity). Control pot size", equityStr));
 }
 
 Decision DecisionEngine::decideTurn() {
@@ -266,23 +269,25 @@ Decision DecisionEngine::decideTurn() {
     double equity = HandEvaluator::calculateEquity(session_.heroCards(), session_.board(), 500);
     double potOdds = session_.potOdds();
 
+    std::string equityStr = std::format("{:.1f}%", equity * 100.0);
+
     if (session_.toCall() > 0) {
         int64_t callAmt = session_.toCall();
 
         // Strong made hand
         if (hand.rank >= HandRank::ThreeOfAKind || equity > 0.8) {
             if (equity > 0.9) {
-                return Decision::raise(callAmt * 2, "Monster. Raise for value");
+                return Decision::raise(callAmt * 2, std::format("Monster ({} equity). Raise for value", equityStr));
             }
-            return Decision::call(callAmt, "Strong hand. Call down");
+            return Decision::call(callAmt, std::format("Strong hand ({} equity). Call down", equityStr));
         }
 
         // Two pair or better
         if (hand.rank >= HandRank::TwoPair) {
             if (potOdds < 0.35) {
-                return Decision::call(callAmt, "Value call with two pair+");
+                return Decision::call(callAmt, std::format("Value call with two pair+ ({} equity)", equityStr));
             }
-            return Decision::fold("Pot too large, fold to aggression");
+            return Decision::fold(std::format("Pot too large, fold ({} equity)", equityStr));
         }
 
         // Draws
@@ -291,19 +296,19 @@ Decision DecisionEngine::decideTurn() {
             double needed = potOdds;
             double approxEquity = outs / 47.0;
             if (approxEquity > needed * 0.8) {
-                return Decision::call(callAmt, std::format("Call with {} outs and good odds", outs));
+                return Decision::call(callAmt, std::format("Call with {} outs ({} equity) and good odds", outs, equityStr));
             }
         }
 
         // Weak hands
         if (equity < 0.3) {
             if (potOdds < 0.15) {
-                return Decision::call(callAmt, "Bluff catch in big pot");
+                return Decision::call(callAmt, std::format("Bluff catch ({} equity) in big pot", equityStr));
             }
-            return Decision::fold("Weak hand. Fold");
+            return Decision::fold(std::format("Weak hand ({} equity). Fold", equityStr));
         }
 
-        return Decision::call(callAmt, "Showdown value call");
+        return Decision::call(callAmt, std::format("Showdown value call ({} equity)", equityStr));
     }
 
     // First to act or checked to
@@ -312,7 +317,7 @@ Decision DecisionEngine::decideTurn() {
     // Very strong hands - always value bet
     if (equity > 0.75) {
         int64_t betSize = getValueBetSize();
-        return Decision::bet(betSize, "Value bet with very strong hand");
+        return Decision::bet(betSize, std::format("Value bet with very strong hand ({} equity)", equityStr));
     }
 
     // Turn barrel logic - consider board texture
@@ -331,18 +336,18 @@ Decision DecisionEngine::decideTurn() {
 
     if (shouldBarrel) {
         int64_t betSize = getValueBetSize();
-        return Decision::bet(betSize, "Turn barrel for value");
+        return Decision::bet(betSize, std::format("Turn barrel for value ({} equity)", equityStr));
     }
 
     // Second barrel as bluff on dry boards with good equity
     if (texture == BoardTexture::Dry && equity > 0.4 && session_.spr() > 4) {
         int64_t betSize = getBluffSize();
-        return Decision::bet(betSize, "Bluff on dry turn with equity");
+        return Decision::bet(betSize, std::format("Bluff on dry turn ({} equity) with equity", equityStr));
     }
 
     // Check behind with marginal hands
     if (hand.rank == HandRank::OnePair) {
-        return Decision::check("Check back with one pair for pot control");
+        return Decision::check(std::format("Check back with one pair ({} equity) for pot control", equityStr));
     }
 
     return Decision::check("Check with marginal hand");
