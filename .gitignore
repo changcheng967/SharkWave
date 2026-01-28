@@ -1,0 +1,39 @@
+# build artifacts
+build/
+out/
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+*.lib
+*.a
+
+# cmake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+.ninja_deps
+.ninja_log
+
+# clang
+*.bc
+*.ll
+
+# ide
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.sln
+
+# os
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# docs
+CLAUDE.md
