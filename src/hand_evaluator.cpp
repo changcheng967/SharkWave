@@ -464,4 +464,110 @@ double HandEvaluator::calculateEquity(const CardSet& holeCards, const CardSet& b
     return (wins + 0.5 * ties) / static_cast<double>(iterations);
 }
 
+std::string HandEvaluator::cardRankToString(Rank rank) {
+    switch (rank) {
+        case Rank::Two:   return "2";
+        case Rank::Three: return "3";
+        case Rank::Four:  return "4";
+        case Rank::Five:  return "5";
+        case Rank::Six:   return "6";
+        case Rank::Seven: return "7";
+        case Rank::Eight: return "8";
+        case Rank::Nine:  return "9";
+        case Rank::Ten:   return "T";
+        case Rank::Jack:  return "J";
+        case Rank::Queen: return "Q";
+        case Rank::King:  return "K";
+        case Rank::Ace:   return "A";
+        default:          return "?";
+    }
+}
+
+std::string HandEvaluator::describeHand(const CardSet& holeCards, const CardSet& board) {
+    if (holeCards.count < 2) return "Unknown";
+
+    CardSet fullHand;
+    for (size_t i = 0; i < holeCards.count; ++i) fullHand.add(holeCards.cards[i]);
+    for (size_t i = 0; i < board.count; ++i) fullHand.add(board.cards[i]);
+
+    HandResult result = evaluate(fullHand);
+
+    // For made hands, give detailed description
+    if (result.rank >= HandRank::OnePair && board.count >= 3) {
+        // Find what we paired with
+        Card c1 = holeCards.cards[0];
+        Card c2 = holeCards.cards[1];
+
+        // Get board ranks
+        std::array<bool, 15> boardRank{};
+        for (size_t i = 0; i < board.count; ++i) {
+            boardRank[rankValue(board.cards[i].rank())] = true;
+        }
+
+        // Check if we have a pair using hole cards
+        bool c1Paired = boardRank[rankValue(c1.rank())];
+        bool c2Paired = boardRank[rankValue(c2.rank())];
+        bool pocketPair = (c1.rank() == c2.rank());
+
+        if (result.rank == HandRank::OnePair) {
+            if (pocketPair) {
+                return std::format("Pocket pair of {}{}s", cardRankToString(c1.rank()), cardRankToString(c1.rank()));
+            }
+            int topBoard = 0;
+            for (int i = 14; i >= 2; --i) {
+                if (boardRank[i]) { topBoard = i; break; }
+            }
+
+            if (c1Paired && !c2Paired) {
+                // C1 paired with board
+                int kicker = rankValue(c2.rank());
+                if (rankValue(c1.rank()) == topBoard) {
+                    if (kicker >= 10) return "Top pair, great kicker";
+                    if (kicker >= 7) return "Top pair, good kicker";
+                    return "Top pair, weak kicker";
+                }
+                return std::format("Middle pair with {} kicker", kicker >= 10 ? "good" : "weak");
+            }
+            if (c2Paired && !c1Paired) {
+                int kicker = rankValue(c1.rank());
+                if (rankValue(c2.rank()) == topBoard) {
+                    if (kicker >= 10) return "Top pair, great kicker";
+                    if (kicker >= 7) return "Top pair, good kicker";
+                    return "Top pair, weak kicker";
+                }
+                return "Middle pair";
+            }
+            return "One pair";
+        }
+
+        if (result.rank == HandRank::TwoPair) {
+            if (pocketPair) return "Two pair (overpair + board pair)";
+            if (c1Paired && c2Paired) return "Two pair (both hole cards paired)";
+            return "Two pair";
+        }
+
+        if (result.rank == HandRank::ThreeOfAKind) {
+            if (pocketPair) return std::format("Set of {}{}s", cardRankToString(c1.rank()), cardRankToString(c1.rank()));
+            return "Trips";
+        }
+
+        if (result.rank == HandRank::Straight) return "Straight";
+        if (result.rank == HandRank::Flush) return "Flush";
+        if (result.rank == HandRank::FullHouse) return "Full house";
+        if (result.rank == HandRank::FourOfAKind) return "Quads";
+        if (result.rank >= HandRank::StraightFlush) return "Straight flush";
+    }
+
+    // Draw descriptions
+    if (board.count >= 3 && result.rank == HandRank::HighCard) {
+        int outs = countOuts(holeCards, board);
+        if (outs >= 10) return std::format("Strong draw ({}+ outs)", outs);
+        if (outs >= 6) return std::format("Draw ({} outs)", outs);
+        if (outs >= 3) return "Weak draw";
+        return "High card";
+    }
+
+    return rankToString(result.rank);
+}
+
 } // namespace sharkwave

@@ -43,6 +43,12 @@ public:
     // Get string representation of hand rank
     static std::string rankToString(HandRank rank);
 
+    // Get string representation of card rank (A, K, Q, etc.)
+    static std::string cardRankToString(Rank rank);
+
+    // Describe hand in detail (e.g., "top pair good kicker")
+    static std::string describeHand(const CardSet& holeCards, const CardSet& board);
+
     // Check for specific draws
     static bool hasFlushDraw(const CardSet& holeCards, const CardSet& board);
     static bool hasOpenEndedStraightDraw(const CardSet& holeCards, const CardSet& board);

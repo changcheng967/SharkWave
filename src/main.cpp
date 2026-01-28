@@ -55,6 +55,12 @@ void printYourTurn() {
 }
 
 void printGameInfo(GameSession& session) {
+    // Show hand description postflop
+    if (session.street() >= Street::Flop && session.board().count >= 3) {
+        std::string handDesc = HandEvaluator::describeHand(session.heroCards(), session.board());
+        std::cout << "> Hand: " << handDesc << "\n";
+    }
+
     // Show SPR (Stack-to-Pot Ratio) - crucial for decision making
     double spr = session.spr();
     int64_t effectiveStack = session.effectiveStack();
