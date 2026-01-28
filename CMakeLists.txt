@@ -12,28 +12,40 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -flto")
 set(CMAKE_EXE_LINKER_FLAGS_RELEASE "-flto")
 
 # Source files
-set(SOURCES
-    src/main.cpp
+set(COMMON_SOURCES
     src/card.cpp
     src/deck.cpp
     src/hand_evaluator.cpp
     src/game_session.cpp
     src/decision_engine.cpp
     src/gto_charts.cpp
+    src/simulation.cpp
 )
 
-set(HEADERS
+set(COMMON_HEADERS
     src/card.h
     src/deck.h
     src/hand_evaluator.h
     src/game_session.h
     src/decision_engine.h
     src/gto_charts.h
+    src/simulation.h
 )
 
-add_executable(sharkwave ${SOURCES} ${HEADERS})
+# Main CLI executable
+add_executable(sharkwave src/main.cpp ${COMMON_SOURCES} ${COMMON_HEADERS})
 
 target_compile_options(sharkwave PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+# Simulation executable
+add_executable(sharkwave_sim src/main_sim.cpp ${COMMON_SOURCES} ${COMMON_HEADERS})
+
+target_compile_options(sharkwave_sim PRIVATE
     -Wall
     -Wextra
     -Wpedantic
@@ -43,6 +55,9 @@ target_compile_options(sharkwave PRIVATE
 # Windows subsystem:console
 if(WIN32)
     set_target_properties(sharkwave PROPERTIES
+        WIN32_EXECUTABLE FALSE
+    )
+    set_target_properties(sharkwave_sim PROPERTIES
         WIN32_EXECUTABLE FALSE
     )
 endif()
