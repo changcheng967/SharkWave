@@ -14,7 +14,13 @@ using namespace sharkwave;
 // CLI helpers
 void printHeader() {
     std::cout << "\n=== SHARKWAVE ===\n";
-    std::cout << "New session. Let's make money.\n\n";
+    std::cout << "GTO Poker Assistant - v1.3\n";
+    std::cout << "New session. Let's make money.\n";
+    std::cout << "\nQuick guide:\n";
+    std::cout << "- Cards: rank+suit (e.g. Ah = Ace of hearts, Ks = King of spades)\n";
+    std::cout << "- Position: UTG/MP/CO/BTN/SB/BB (6-max positions)\n";
+    std::cout << "- Actions: fold, check, call, bet, raise, done, skip\n";
+    std::cout << "- 'all fold' to win preflop, 'skip' to skip board input\n\n";
 }
 
 void printStreetHeader(Street street) {
