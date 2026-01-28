@@ -133,6 +133,8 @@ Card parseCard(const std::string& input) {
 
 void runSession() {
     GameSession session;
+    int64_t totalSessionProfit = 0;
+    int handsPlayed = 0;
 
     printHeader();
 
@@ -233,9 +235,21 @@ void runSession() {
             std::getline(std::cin, line);
             if (line == "done" || line.find("all fold") != std::string::npos) {
                 // All opponents folded - we win preflop
-                std::cout << "(You won the blinds!)\n";
+                std::cout << "(You won the blinds! +15 chips)\n";
                 profitThisHand = sb + bb;
                 handOver = true;
+                // Skip to stats tracking
+                totalSessionProfit += profitThisHand;
+                handsPlayed++;
+                std::cout << "\n=== SESSION STATS ===\n";
+                std::cout << "Hands: " << handsPlayed << " | Profit this hand: " << profitThisHand;
+                std::cout << " | Total: " << totalSessionProfit << " (" << (totalSessionProfit / (bb * 100.0)) << " BB/100)\n";
+                std::cout << "\nNext hand? (y/n) ";
+                std::getline(std::cin, line);
+                if (line.empty() || std::tolower(line[0]) != 'y') {
+                    break;
+                }
+                continue; // Skip to next hand
             }
         }
 
@@ -344,6 +358,15 @@ void runSession() {
             }
         }
 
+        // Track cumulative profit
+        totalSessionProfit += profitThisHand;
+        handsPlayed++;
+
+        // Show running stats
+        std::cout << "\n=== SESSION STATS ===\n";
+        std::cout << "Hands: " << handsPlayed << " | Profit this hand: " << profitThisHand;
+        std::cout << " | Total: " << totalSessionProfit << " (" << (totalSessionProfit / (bb * 100.0)) << " BB/100)\n";
+
         // Continue?
         std::cout << "\nNext hand? (y/n) ";
         std::getline(std::cin, line);
@@ -352,9 +375,19 @@ void runSession() {
         }
     }
 
-    std::cout << "\nSession complete.\n";
-    std::cout << "Hands played: " << session.handsPlayed() << "\n";
-    std::cout << "Final profit: " << session.sessionProfit() << "\n";
+    std::cout << "\n========================================\n";
+    std::cout << "SESSION COMPLETE\n";
+    std::cout << "========================================\n";
+    std::cout << "Hands played: " << handsPlayed << "\n";
+    std::cout << "Final profit: " << totalSessionProfit << " chips\n";
+    std::cout << "BB/100: " << (totalSessionProfit / (bb * 100.0)) << "\n";
+    if (totalSessionProfit > 0) {
+        std::cout << ">>> WINNER! Nice session! <<<\n";
+    } else if (totalSessionProfit < 0) {
+        std::cout << ">>> LOSER. Better luck next time. <<<\n";
+    } else {
+        std::cout << ">>> BREAK EVEN. <<<\n";
+    }
 }
 
 int main() {
