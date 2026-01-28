@@ -228,37 +228,48 @@ Decision Simulation::getHeroDecision(bool facingBet, int64_t facingAmt) {
         return Decision::check("Check with trash in HU");
     }
 
-    // Postflop decisions
+    // Postflop decisions - HEADS UP AGGRESSION
     if (facingBet) {
-        // Facing a bet
-        if (hand.rank >= ::sharkwave::HandRank::ThreeOfAKind || equity > 0.75) {
-            if (equity > 0.85) {
-                int64_t raiseAmt = facingAmt * 2;
-                return Decision::raise(raiseAmt, "Monster. Raise for value");
+        // Facing a bet - be more aggressive in HU
+        if (hand.rank >= ::sharkwave::HandRank::TwoPair || equity > 0.65) {
+            if (equity > 0.75) {
+                int64_t raiseAmt = facingAmt * 2 + pot_;
+                if (raiseAmt > heroStack_) raiseAmt = heroStack_;
+                return Decision::raise(raiseAmt, "Raise for value with strong hand");
             }
-            return Decision::call(facingAmt, "Strong hand. Call down");
+            return Decision::call(facingAmt, "Call with good made hand");
         }
 
-        if (hand.rank >= ::sharkwave::HandRank::OnePair && equity > 0.5) {
-            if (potOdds < 0.35) {
-                return Decision::call(facingAmt, "Value call with made hand");
+        if (hand.rank >= ::sharkwave::HandRank::OnePair || equity > 0.45) {
+            if (potOdds < 0.40) {
+                return Decision::call(facingAmt, "Call with pair or decent equity");
             }
-            return Decision::fold("Pot too large, fold to aggression");
+            // In HU, call more liberally
+            if (equity > 0.35) {
+                return Decision::call(facingAmt, "Call with showdown value");
+            }
+            return Decision::fold("Fold to large bet without odds");
         }
 
-        // Draw evaluation
+        // Draw evaluation - semi-bluff raises with strong draws
         int outs = HandEvaluator::countOuts(heroCards_, board_);
+        if (outs >= 12) {
+            // Monster draw - raise semi-bluff
+            int64_t raiseAmt = facingAmt + pot_;
+            if (raiseAmt > heroStack_) raiseAmt = heroStack_;
+            return Decision::raise(raiseAmt, std::format("Semi-bluff raise with {} outs", outs));
+        }
         if (outs >= 8) {
             double approxEquity = outs / 47.0;
-            if (approxEquity > potOdds * 0.8) {
+            if (approxEquity > potOdds * 0.7 || equity > 0.35) {
                 return Decision::call(facingAmt, std::format("Call with {} outs and good odds", outs));
             }
         }
 
-        // Weak hands
-        if (equity < 0.3) {
-            if (potOdds < 0.15) {
-                return Decision::call(facingAmt, "Bluff catch in big pot");
+        // Weak hands - but in HU we catch bluffs more often
+        if (equity < 0.25) {
+            if (potOdds < 0.25) {
+                return Decision::call(facingAmt, "Bluff catch with good price");
             }
             return Decision::fold("Weak hand. Fold to bet");
         }
@@ -266,29 +277,51 @@ Decision Simulation::getHeroDecision(bool facingBet, int64_t facingAmt) {
         return Decision::call(facingAmt, "Showdown value call");
     }
 
-    // First to act or checked to
-    if (equity > 0.75 && hand.rank >= ::sharkwave::HandRank::OnePair) {
+    // First to act or checked to - BET AGGRESSIVELY IN HU
+    // In heads up, you need to bet frequently to win pots
+
+    // Value bets - bet bigger with stronger hands
+    if (equity > 0.80) {
         int64_t betSize = static_cast<int64_t>(pot_ * 0.75);
-        return Decision::bet(betSize, "Value bet with very strong hand");
+        return Decision::bet(betSize, "Big value bet with very strong hand");
     }
 
-    if (equity > 0.6) {
-        int64_t betSize = static_cast<int64_t>(pot_ * 0.5);
-        return Decision::bet(betSize, "Value bet with good hand");
+    if (equity > 0.60) {
+        int64_t betSize = static_cast<int64_t>(pot_ * 0.60);
+        return Decision::bet(betSize, "Value bet with strong hand");
     }
 
+    // Semi-bluffs with draws
     int outs = HandEvaluator::countOuts(heroCards_, board_);
-    if (outs >= 8 && equity > 0.35) {
-        int64_t betSize = static_cast<int64_t>(pot_ * 0.4);
+    if (outs >= 12) {
+        int64_t betSize = static_cast<int64_t>(pot_ * 0.60);
         return Decision::bet(betSize, std::format("Semi-bluff with {} outs", outs));
     }
-
-    if (equity > 0.45) {
-        int64_t betSize = static_cast<int64_t>(pot_ * 0.33);
-        return Decision::bet(betSize, "Continuation bet with equity");
+    if (outs >= 6) {
+        int64_t betSize = static_cast<int64_t>(pot_ * 0.40);
+        return Decision::bet(betSize, std::format("Probe bet with {} outs", outs));
     }
 
-    return Decision::check("Check with marginal hand");
+    // Continuation bet - bet frequently in HU
+    if (equity > 0.50) {
+        int64_t betSize = static_cast<int64_t>(pot_ * 0.50);
+        return Decision::bet(betSize, "Continuation bet with equity advantage");
+    }
+
+    // Even weak hands should sometimes bet (bluff) in HU
+    if (equity > 0.35) {
+        int64_t betSize = static_cast<int64_t>(pot_ * 0.33);
+        return Decision::bet(betSize, "Small bet for thin value/protection");
+    }
+
+    // Pure bluffs with backdoor - less frequent
+    std::uniform_real_distribution<double> dist(0.0, 1.0);
+    if (dist(rng_) < 0.25) {
+        int64_t betSize = static_cast<int64_t>(pot_ * 0.33);
+        return Decision::bet(betSize, "Bluff with weakest hands");
+    }
+
+    return Decision::check("Check with garbage");
 }
 
 void Simulation::settleShowdown() {
