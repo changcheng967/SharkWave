@@ -209,6 +209,21 @@ void runSession() {
             profitThisHand = -(bb / 2);
         } else if (line == "done" || line == "skip") {
             // Continue to flop
+        } else if (line[0] == 'r' || line[0] == 'R' || line[0] == 'b' || line[0] == 'B') {
+            // User bet or raised - continue to flop
+            std::cout << "(Bet/raise - continue to flop)\n";
+        }
+
+        // Ask about opponent actions before flop
+        if (!handOver) {
+            std::cout << "\nOpponents? (actions like \"call fold\" or \"done\" if all folded) ";
+            std::getline(std::cin, line);
+            if (line == "done" || line.find("all fold") != std::string::npos) {
+                // All opponents folded - we win preflop
+                std::cout << "(You won the blinds!)\n";
+                profitThisHand = sb + bb;
+                handOver = true;
+            }
         }
 
         if (!handOver) {
