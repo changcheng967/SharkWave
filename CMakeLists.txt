@@ -52,6 +52,30 @@ target_compile_options(sharkwave_sim PRIVATE
     -Werror
 )
 
+# GUI executable (Windows only)
+if(WIN32)
+    set(GUI_SOURCES src/gui.cpp src/main_gui.cpp)
+    add_executable(sharkwave_gui WIN32 ${GUI_SOURCES} ${COMMON_SOURCES} ${COMMON_HEADERS})
+
+    target_compile_definitions(sharkwave_gui PRIVATE
+        UNICODE
+        _UNICODE
+    )
+
+    target_link_libraries(sharkwave_gui
+        comctl32
+        gdi32
+        user32
+    )
+
+    target_compile_options(sharkwave_gui PRIVATE
+        -Wall
+        -Wextra
+        -Wpedantic
+        -Werror
+    )
+endif()
+
 # Windows subsystem:console
 if(WIN32)
     set_target_properties(sharkwave PROPERTIES
