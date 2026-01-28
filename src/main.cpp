@@ -7,6 +7,7 @@
 #include <format>
 #include <string>
 #include <cctype>
+#include <iomanip>
 
 using namespace sharkwave;
 
@@ -51,6 +52,25 @@ void printDecision(const Decision& decision) {
 
 void printYourTurn() {
     std::cout << "\nYOUR TURN.\n";
+}
+
+void printGameInfo(GameSession& session) {
+    // Show SPR (Stack-to-Pot Ratio) - crucial for decision making
+    double spr = session.spr();
+    int64_t effectiveStack = session.effectiveStack();
+    int64_t pot = session.pot();
+
+    std::cout << "> SPR: " << std::fixed << std::setprecision(1) << spr;
+    std::cout << " (Effective stack: " << effectiveStack << ", Pot: " << pot << ")\n";
+
+    // Show pot odds if facing a bet
+    if (session.toCall() > 0) {
+        double potOdds = session.potOdds();
+        int64_t toCall = session.toCall();
+        double oddsPercent = potOdds * 100.0;
+        std::cout << "> Facing bet: " << toCall << " to win " << (pot + toCall);
+        std::cout << " (" << std::fixed << std::setprecision(1) << oddsPercent << "% pot odds)\n";
+    }
 }
 
 Position parsePosition(const std::string& input) {
@@ -165,6 +185,7 @@ void runSession() {
         printStreetHeader(Street::Preflop);
         printPotInfo(session);
         printYourTurn();
+        printGameInfo(session);
 
         Decision decision = engine.makeDecision();
         printDecision(decision);
@@ -198,6 +219,7 @@ void runSession() {
                 session.setFlop(c1, c2, c3);
 
                 printYourTurn();
+        printGameInfo(session);
                 decision = engine.makeDecision();
                 printDecision(decision);
 
@@ -227,6 +249,7 @@ void runSession() {
                 session.setTurn(c);
 
                 printYourTurn();
+        printGameInfo(session);
                 decision = engine.makeDecision();
                 printDecision(decision);
 
@@ -256,6 +279,7 @@ void runSession() {
                 session.setRiver(c);
 
                 printYourTurn();
+        printGameInfo(session);
                 decision = engine.makeDecision();
                 printDecision(decision);
 
