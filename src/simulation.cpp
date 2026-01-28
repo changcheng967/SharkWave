@@ -228,14 +228,27 @@ Decision Simulation::getHeroDecision(bool facingBet, int64_t facingAmt) {
         return Decision::check("Check with trash in HU");
     }
 
-    // Postflop decisions - HEADS UP AGGRESSION
+    // Postflop decisions - EXPLOITATIVE based on opponent type
     if (facingBet) {
-        // Facing a bet - be more aggressive in HU
-        if (hand.rank >= ::sharkwave::HandRank::TwoPair || equity > 0.65) {
+        // Adjust play based on opponent
+        bool vsCallingStation = (opponentType_ == OpponentType::CallingStation);
+        bool vsTightPassive = (opponentType_ == OpponentType::TightPassive);
+        bool vsLAG = (opponentType_ == OpponentType::LooseAggressive);
+        (void)vsTightPassive; // Used in threshold calculation
+
+        // EXPLOIT: Value bet thinner vs calling stations
+        double valueThreshold = vsCallingStation ? 0.50 : 0.65;
+        double bluffCatchThreshold = vsCallingStation ? 0.35 : 0.25;
+
+        if (hand.rank >= ::sharkwave::HandRank::TwoPair || equity > valueThreshold) {
             if (equity > 0.75) {
                 int64_t raiseAmt = facingAmt * 2 + pot_;
                 if (raiseAmt > heroStack_) raiseAmt = heroStack_;
                 return Decision::raise(raiseAmt, "Raise for value with strong hand");
+            }
+            // EXPLOIT: Call more vs calling stations
+            if (vsCallingStation && equity > 0.55) {
+                return Decision::call(facingAmt, "Call for value vs station");
             }
             return Decision::call(facingAmt, "Call with good made hand");
         }
@@ -244,7 +257,10 @@ Decision Simulation::getHeroDecision(bool facingBet, int64_t facingAmt) {
             if (potOdds < 0.40) {
                 return Decision::call(facingAmt, "Call with pair or decent equity");
             }
-            // In HU, call more liberally
+            // EXPLOIT: Call lighter vs LAG but not too light
+            if (vsLAG && equity > 0.32) {
+                return Decision::call(facingAmt, "Call vs LAG with showdown value");
+            }
             if (equity > 0.35) {
                 return Decision::call(facingAmt, "Call with showdown value");
             }
@@ -266,9 +282,10 @@ Decision Simulation::getHeroDecision(bool facingBet, int64_t facingAmt) {
             }
         }
 
-        // Weak hands - but in HU we catch bluffs more often
-        if (equity < 0.25) {
-            if (potOdds < 0.25) {
+        // Weak hands - EXPLOIT: bluff catch selectively
+        if (equity < bluffCatchThreshold) {
+            double catchThreshold = vsLAG ? 0.30 : 0.25;
+            if (potOdds < catchThreshold) {
                 return Decision::call(facingAmt, "Bluff catch with good price");
             }
             return Decision::fold("Weak hand. Fold to bet");
@@ -277,8 +294,26 @@ Decision Simulation::getHeroDecision(bool facingBet, int64_t facingAmt) {
         return Decision::call(facingAmt, "Showdown value call");
     }
 
-    // First to act or checked to - BET AGGRESSIVELY IN HU
-    // In heads up, you need to bet frequently to win pots
+    // First to act or checked to - EXPLOITATIVE betting
+    bool vsLAG = (opponentType_ == OpponentType::LooseAggressive);
+    bool vsCallingStation = (opponentType_ == OpponentType::CallingStation);
+    bool vsTightPassive = (opponentType_ == OpponentType::TightPassive);
+
+    // EXPLOIT: Value bet thinner vs stations, normal vs LAG, tighter vs tight
+    double thinValueThreshold = vsCallingStation ? 0.40 : (vsLAG ? 0.55 : 0.60);
+    double bluffFrequency = vsTightPassive ? 0.40 : 0.25;
+
+    // EXPLOIT: Don't bluff vs LAG or stations - they call too much
+    if (vsLAG || vsCallingStation) {
+        bluffFrequency = 0.0;
+    }
+
+    // EXPLOIT: Value bet HARD vs LAG (they call too wide)
+    // Use smaller sizing to keep them calling with worse
+    if (vsLAG && equity > 0.55) {
+        int64_t betSize = static_cast<int64_t>(pot_ * 0.50);
+        return Decision::bet(betSize, "Value bet vs LAG - they call wide");
+    }
 
     // Value bets - bet bigger with stronger hands
     if (equity > 0.80) {
@@ -286,7 +321,7 @@ Decision Simulation::getHeroDecision(bool facingBet, int64_t facingAmt) {
         return Decision::bet(betSize, "Big value bet with very strong hand");
     }
 
-    if (equity > 0.60) {
+    if (equity > thinValueThreshold) {
         int64_t betSize = static_cast<int64_t>(pot_ * 0.60);
         return Decision::bet(betSize, "Value bet with strong hand");
     }
@@ -302,23 +337,31 @@ Decision Simulation::getHeroDecision(bool facingBet, int64_t facingAmt) {
         return Decision::bet(betSize, std::format("Probe bet with {} outs", outs));
     }
 
-    // Continuation bet - bet frequently in HU
-    if (equity > 0.50) {
+    // Continuation bet - but not vs LAGs
+    if (!vsLAG && equity > 0.50) {
         int64_t betSize = static_cast<int64_t>(pot_ * 0.50);
         return Decision::bet(betSize, "Continuation bet with equity advantage");
     }
 
+    // Thin value vs calling stations
+    if (vsCallingStation && equity > 0.38) {
+        int64_t betSize = static_cast<int64_t>(pot_ * 0.40);
+        return Decision::bet(betSize, "Thin value bet vs calling station");
+    }
+
     // Even weak hands should sometimes bet (bluff) in HU
-    if (equity > 0.35) {
+    // EXPLOIT: Bluff more vs tight players, never vs stations/LAG
+    if (!vsLAG && !vsCallingStation && equity > 0.35) {
         int64_t betSize = static_cast<int64_t>(pot_ * 0.33);
         return Decision::bet(betSize, "Small bet for thin value/protection");
     }
 
-    // Pure bluffs with backdoor - less frequent
+    // EXPLOITATIVE bluffs based on opponent
     std::uniform_real_distribution<double> dist(0.0, 1.0);
-    if (dist(rng_) < 0.25) {
+    if ((vsTightPassive || opponentType_ == OpponentType::Random) &&
+        dist(rng_) < bluffFrequency) {
         int64_t betSize = static_cast<int64_t>(pot_ * 0.33);
-        return Decision::bet(betSize, "Bluff with weakest hands");
+        return Decision::bet(betSize, "Exploitative bluff vs tight opponent");
     }
 
     return Decision::check("Check with garbage");
@@ -360,6 +403,15 @@ Simulation::SimHandResult Simulation::playSingleHand() {
 
     // Track starting stacks for profit calculation
     int64_t heroStartStack = heroStack_;
+
+    // Cap stacks at 200 BB to simulate real poker (you'd leave table or cash out)
+    const int64_t maxStack = 200 * bb_;
+    if (heroStack_ > maxStack) heroStack_ = maxStack;
+    if (villainStack_ > maxStack) villainStack_ = maxStack;
+    // Rebuy if below 20 BB
+    const int64_t minStack = 100 * bb_;
+    if (heroStack_ < minStack) heroStack_ = minStack;
+    if (villainStack_ < minStack) villainStack_ = minStack;
 
     // Reset for new hand
     pot_ = 0;
