@@ -10,6 +10,9 @@
 
 #pragma comment(lib, "comctl32.lib")
 
+// Debug file shared with main_gui.cpp
+extern FILE* g_debugFile;
+
 namespace sharkwave {
 
 // Localization strings
@@ -88,6 +91,11 @@ void PokerGui::setLanguage(Language lang) {
 
 void PokerGui::logDebug(const std::string& msg) {
     state_.debugLog += msg + "\n";
+    // Also write to debug file
+    if (g_debugFile) {
+        fprintf(g_debugFile, "%s\n", msg.c_str());
+        fflush(g_debugFile);
+    }
     if (g_hDebugEdit) {
         appendDebug(msg.c_str());
     }
@@ -432,8 +440,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
         }
 
         case WM_COMMAND: {
-            g_gui->logDebug("WM_COMMAND - wParam=%08X lParam=%08X", wParam, lParam);
-
+            // Only log button clicks, not every notification
             if (HIWORD(wParam) == BN_CLICKED) {
                 if (LOWORD(wParam) == 10) {  // Decide button
                     g_gui->logDebug("DECIDE button clicked");
@@ -499,7 +506,7 @@ void PokerGui::run() {
     logDebug("Creating window: %dx%d", winWidth, winHeight);
     HWND hWnd = CreateWindowExA(
         0, CLASS_NAME, STR_APP_NAME[0], style,
-        CW_USEDEFAULT, CW_USEDEFAULT, winWidth, winHeight,
+        100, 50, winWidth, winHeight,
         NULL, NULL, g_hInstance, NULL
     );
 

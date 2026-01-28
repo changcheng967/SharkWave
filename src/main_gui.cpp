@@ -3,8 +3,8 @@
 
 using namespace sharkwave;
 
-// Simple file-based debug logging (avoids stdout/stderr issues in GUI subsystem)
-static FILE* g_debugFile = nullptr;
+// Debug file accessible from gui.cpp
+FILE* g_debugFile = nullptr;
 
 static void DebugLog(const char* msg) {
     if (g_debugFile) {
