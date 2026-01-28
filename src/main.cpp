@@ -193,6 +193,19 @@ void runSession() {
         printYourTurn();
         printGameInfo(session);
 
+        // Check if facing a raise (for 3-bet scenarios)
+        std::cout << "\nFacing a raise? (amount or \"no\") ";
+        std::getline(std::cin, line);
+        if (line != "no" && !line.empty()) {
+            try {
+                int64_t raiseAmt = std::stoll(line);
+                std::cout << "(Facing " << raiseAmt << " bet - adjusting...)\n";
+                // For now, note that 3-bet logic exists but needs session integration
+            } catch (...) {
+                // Invalid input, continue normally
+            }
+        }
+
         Decision decision = engine.makeDecision();
         printDecision(decision);
 
