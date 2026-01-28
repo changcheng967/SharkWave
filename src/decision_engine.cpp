@@ -205,20 +205,50 @@ Decision DecisionEngine::decideFlop() {
         return Decision::bet(betSize, "Value bet with strong hand");
     }
 
-    // Semi-bluff with draws
+    // Adjust c-bet frequency based on board texture
+    bool shouldCBet = false;
+
+    if (texture == BoardTexture::Dry) {
+        // Dry boards: c-bet more often, opponents missed more
+        shouldCBet = (equity > 0.35);
+    } else if (texture == BoardTexture::Wet) {
+        // Wet boards: c-bet less often, opponents have more draws/connected hands
+        shouldCBet = (equity > 0.45 || (equity > 0.4 && hand.rank >= HandRank::OnePair));
+    } else { // VeryWet
+        // Very wet boards: c-bet for value or with draws
+        shouldCBet = (equity > 0.55 && hand.rank >= HandRank::OnePair);
+    }
+
+    // Semi-bluff with draws - more aggressive on all board textures
     int outs = HandEvaluator::countOuts(session_.heroCards(), session_.board());
-    if (outs >= 8 && texture == BoardTexture::Dry) {
-        int64_t betSize = getCBetSize();
-        return Decision::bet(betSize, std::format("Semi-bluff with {} outs. Good fold equity on dry board.", outs));
+    if (outs >= 8) {
+        if (texture == BoardTexture::Dry) {
+            int64_t betSize = getCBetSize();
+            return Decision::bet(betSize, std::format("Semi-bluff with {} outs. Good fold equity on dry board.", outs));
+        }
+        // On wet boards, still semi-bluff with strong draws
+        if (outs >= 10) {
+            int64_t betSize = getCBetSize();
+            return Decision::bet(betSize, std::format("Semi-bluff with {} outs on wet board", outs));
+        }
     }
 
-    // Continuation bet
-    if (equity > 0.5 || (isInPosition() && equity > 0.4)) {
+    // Continuation bet with board texture consideration
+    if (shouldCBet) {
         int64_t betSize = getCBetSize();
-        return Decision::bet(betSize, "Continuation bet with equity advantage");
+        if (texture == BoardTexture::Dry) {
+            return Decision::bet(betSize, "C-bet on dry board. Good fold equity.");
+        }
+        if (texture == BoardTexture::Wet || texture == BoardTexture::VeryWet) {
+            return Decision::bet(betSize, "C-bet on wet board with showdown value");
+        }
+        return Decision::bet(betSize, "Value c-bet with decent hand");
     }
 
-    // Check with weak hand
+    // Check with weak hand - more checking on wet boards
+    if (texture == BoardTexture::Wet || texture == BoardTexture::VeryWet) {
+        return Decision::check("Check on wet board. Pot control with marginal hand.");
+    }
     return Decision::check("Check with weak hand. Control pot size");
 }
 
@@ -277,20 +307,42 @@ Decision DecisionEngine::decideTurn() {
     }
 
     // First to act or checked to
+    BoardTexture texture = analyzeBoardTexture();
+
+    // Very strong hands - always value bet
     if (equity > 0.75) {
         int64_t betSize = getValueBetSize();
         return Decision::bet(betSize, "Value bet with very strong hand");
     }
 
-    if (equity > 0.6 && hand.rank >= HandRank::OnePair) {
-        int64_t betSize = getValueBetSize();
-        return Decision::bet(betSize, "Value bet with good hand");
+    // Turn barrel logic - consider board texture
+    bool shouldBarrel = false;
+
+    if (texture == BoardTexture::Dry) {
+        // Dry turn: barrel with top pair or better
+        shouldBarrel = (equity > 0.5 && hand.rank >= HandRank::OnePair);
+    } else if (texture == BoardTexture::Wet) {
+        // Wet turn: barrel with good hands
+        shouldBarrel = (equity > 0.6 && hand.rank >= HandRank::OnePair);
+    } else { // VeryWet
+        // Very wet turn: only for value with strong hands
+        shouldBarrel = (equity > 0.65 && hand.rank >= HandRank::OnePair);
     }
 
-    // Bluff with backdoor or weak draws
-    if (equity > 0.35 && session_.spr() > 3) {
+    if (shouldBarrel) {
+        int64_t betSize = getValueBetSize();
+        return Decision::bet(betSize, "Turn barrel for value");
+    }
+
+    // Second barrel as bluff on dry boards with good equity
+    if (texture == BoardTexture::Dry && equity > 0.4 && session_.spr() > 4) {
         int64_t betSize = getBluffSize();
-        return Decision::bet(betSize, "Probe bet with equity");
+        return Decision::bet(betSize, "Bluff on dry turn with equity");
+    }
+
+    // Check behind with marginal hands
+    if (hand.rank == HandRank::OnePair) {
+        return Decision::check("Check back with one pair for pot control");
     }
 
     return Decision::check("Check with marginal hand");
