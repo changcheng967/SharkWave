@@ -37,8 +37,8 @@ private:
     void dealRiver();
     void shuffleDeck();
 
-    Action getOpponentAction(Position pos, const CardSet& holeCards, int64_t facingBet);
-    Decision getHeroDecision();
+    Action getOpponentAction(Position pos, const CardSet& holeCards, int64_t facingBet, bool canCheck);
+    Decision getHeroDecision(bool facingBet, int64_t facingAmt);
 
     void settleShowdown();
 
