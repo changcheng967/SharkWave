@@ -169,86 +169,122 @@ void runSession() {
         Decision decision = engine.makeDecision();
         printDecision(decision);
 
-        std::cout << "\nOpponents? (enter actions like \"fold fold call\" or \"done\") ";
+        std::cout << "\nYour action? (fold/check/call/bet/raise or \"done\" to continue) ";
         std::getline(std::cin, line);
 
-        if (line == "done" || line == "skip") {
-            // Skip to flop
-            session.nextStreet();
-        } else {
-            // Process actions (simplified for MVP)
-            session.nextStreet();
+        bool handOver = false;
+        int64_t profitThisHand = 0;
+
+        if (line.empty() || line[0] == 'f' || line[0] == 'F') {
+            // User folded
+            handOver = true;
+            std::cout << "(Folded -" << (bb / 2) << " chips)\n";
+            profitThisHand = -(bb / 2);
+        } else if (line == "done" || line == "skip") {
+            // Continue to flop
         }
 
-        // Flop
-        printStreetHeader(Street::Flop);
-        printPotInfo(session);
+        if (!handOver) {
+            // Flop
+            printStreetHeader(Street::Flop);
+            printPotInfo(session);
 
-        std::cout << "Board? (e.g. 9c 8c 2d) ";
-        std::getline(std::cin, line);
-        if (line.length() >= 6) {
-            Card c1 = parseCard(line.substr(0, 2));
-            Card c2 = parseCard(line.substr(3, 5));
-            Card c3 = parseCard(line.substr(6, 8));
-            session.setFlop(c1, c2, c3);
-        }
+            std::cout << "Board? (e.g. 9c 8c 2d or \"skip\") ";
+            std::getline(std::cin, line);
+            if (line != "skip" && line.length() >= 6) {
+                Card c1 = parseCard(line.substr(0, 2));
+                Card c2 = parseCard(line.substr(3, 5));
+                Card c3 = parseCard(line.substr(6, 8));
+                session.setFlop(c1, c2, c3);
 
-        printYourTurn();
-        decision = engine.makeDecision();
-        printDecision(decision);
+                printYourTurn();
+                decision = engine.makeDecision();
+                printDecision(decision);
 
-        std::cout << "\nOpponents? (enter actions or \"done\") ";
-        std::getline(std::cin, line);
+                std::cout << "\nYour action? (fold/check/call/bet/raise or \"done\") ";
+                std::getline(std::cin, line);
 
-        if (line == "done" || line == "skip") {
-            session.nextStreet();
-        } else {
-            session.nextStreet();
-        }
+                if (line.empty() || line[0] == 'f' || line[0] == 'F') {
+                    handOver = true;
+                    std::cout << "(Folded)\n";
+                }
+            } else {
+                handOver = true;
+            }
 
-        // Turn
-        printStreetHeader(Street::Turn);
-        printPotInfo(session);
-
-        std::cout << "Turn? (e.g. 3h) ";
-        std::getline(std::cin, line);
-        if (!line.empty() && line.length() >= 2) {
-            Card c = parseCard(line);
-            session.setTurn(c);
-        }
-
-        printYourTurn();
-        decision = engine.makeDecision();
-        printDecision(decision);
-
-        std::cout << "\nOpponents? (enter actions or \"done\") ";
-        std::getline(std::cin, line);
-
-        if (line == "done" || line == "skip") {
-            session.nextStreet();
-        } else {
             session.nextStreet();
         }
 
-        // River
-        printStreetHeader(Street::River);
-        printPotInfo(session);
+        if (!handOver) {
+            // Turn
+            printStreetHeader(Street::Turn);
+            printPotInfo(session);
 
-        std::cout << "River? (e.g. Qc) ";
-        std::getline(std::cin, line);
-        if (!line.empty() && line.length() >= 2) {
-            Card c = parseCard(line);
-            session.setRiver(c);
+            std::cout << "Turn? (e.g. 3h or \"skip\") ";
+            std::getline(std::cin, line);
+            if (line != "skip" && !line.empty() && line.length() >= 2) {
+                Card c = parseCard(line);
+                session.setTurn(c);
+
+                printYourTurn();
+                decision = engine.makeDecision();
+                printDecision(decision);
+
+                std::cout << "\nYour action? (fold/check/call/bet/raise or \"done\") ";
+                std::getline(std::cin, line);
+
+                if (line.empty() || line[0] == 'f' || line[0] == 'F') {
+                    handOver = true;
+                    std::cout << "(Folded)\n";
+                }
+            } else {
+                handOver = true;
+            }
+
+            session.nextStreet();
         }
 
-        printYourTurn();
-        decision = engine.makeDecision();
-        printDecision(decision);
+        if (!handOver) {
+            // River
+            printStreetHeader(Street::River);
+            printPotInfo(session);
+
+            std::cout << "River? (e.g. Qc or \"skip\") ";
+            std::getline(std::cin, line);
+            if (line != "skip" && !line.empty() && line.length() >= 2) {
+                Card c = parseCard(line);
+                session.setRiver(c);
+
+                printYourTurn();
+                decision = engine.makeDecision();
+                printDecision(decision);
+
+                std::cout << "\nYour action? (fold/check/call/bet/raise or \"done\") ";
+                std::getline(std::cin, line);
+
+                if (line.empty() || line[0] == 'f' || line[0] == 'F') {
+                    handOver = true;
+                    std::cout << "(Folded)\n";
+                }
+            } else {
+                handOver = true;
+            }
+        }
 
         // Showdown/result
-        std::cout << "\n=== SHOWDOWN ===\n";
-        std::cout << "Result? (win/loss/tie amount) ";
-        std::getline(std::cin, line);
+        if (!handOver) {
+            std::cout << "\n=== SHOWDOWN ===\n";
+            std::cout << "Result? (+chips won/-chips lost, or 0 for loss) ";
+            std::getline(std::cin, line);
+            if (!line.empty()) {
+                try {
+                    profitThisHand = std::stoll(line);
+                    std::cout << "(Hand " << (profitThisHand >= 0 ? "won" : "lost") << ": " << profitThisHand << " chips)\n";
+                } catch (...) {
+                    profitThisHand = 0;
+                }
+            }
+        }
 
         // Continue?
         std::cout << "\nNext hand? (y/n) ";
