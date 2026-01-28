@@ -364,59 +364,107 @@ Decision DecisionEngine::decideRiver() {
     }
 
     HandResult hand = HandEvaluator::evaluate(fullHand);
+    double equity = HandEvaluator::calculateEquity(session_.heroCards(), session_.board(), 500);
+    std::string equityStr = std::format("{:.1f}%", equity * 100.0);
     double potOdds = session_.potOdds();
+    int64_t pot = session_.pot();
+
+    // Check board texture for sizing decisions
+    BoardTexture texture = analyzeBoardTexture();
+    bool isWetBoard = (texture == BoardTexture::Wet || texture == BoardTexture::VeryWet);
 
     if (session_.toCall() > 0) {
         int64_t callAmt = session_.toCall();
 
-        // Strong value hands
+        // Strong value hands - nutted hands call almost always
         if (hand.rank >= HandRank::Straight) {
-            return Decision::call(callAmt, "Call with strong hand. Got there.");
+            return Decision::call(callAmt, std::format("Call with straight ({} equity). Nutted.", equityStr));
+        }
+
+        if (hand.rank >= HandRank::Flush) {
+            return Decision::call(callAmt, std::format("Call with flush ({} equity). Nutted.", equityStr));
         }
 
         if (hand.rank >= HandRank::ThreeOfAKind) {
-            return Decision::call(callAmt, "Call with set+. Likely good.");
+            return Decision::call(callAmt, std::format("Call with set+ ({} equity). Likely good.", equityStr));
         }
 
         if (hand.rank >= HandRank::TwoPair) {
             // Need better pot odds for two pair
             if (potOdds < 0.4) {
-                return Decision::call(callAmt, "Call with two pair. Good enough.");
+                return Decision::call(callAmt, std::format("Call with two pair ({} equity). Good enough.", equityStr));
             }
-            return Decision::fold("Two pair but facing big bet. Fold.");
+            return Decision::fold(std::format("Two pair ({} equity) but facing big bet. Fold.", equityStr));
         }
 
         // One pair or worse - hero call or fold
         if (potOdds < 0.25) {
-            return Decision::call(callAmt, "Bluff catch in massive pot");
+            return Decision::call(callAmt, std::format("Bluff catch ({} equity) in massive pot", equityStr));
         }
 
-        return Decision::fold("Weak hand. Fold to bet");
+        return Decision::fold(std::format("Weak hand ({} equity). Fold to bet", equityStr));
     }
 
-    // First to act or checked to - value bet or check
+    // First to act or checked to - smart value bet sizing based on hand strength
+    // Nutted hands (flush+, straight+) - bet big for max value
+    if (hand.rank >= HandRank::Straight || hand.rank >= HandRank::Flush) {
+        // On wet boards, use slightly smaller sizing to get called by worse
+        // On dry boards, can go bigger
+        double sizeMult = isWetBoard ? 0.75 : 0.85;
+        int64_t betSize = static_cast<int64_t>(pot * sizeMult);
+        if (betSize > session_.heroStack()) betSize = session_.heroStack();
+        return Decision::bet(betSize, std::format("Big value bet with nutted hand ({} equity)", equityStr));
+    }
+
+    // Sets - strong value
     if (hand.rank >= HandRank::ThreeOfAKind) {
-        int64_t betSize = getValueBetSize();
-        return Decision::bet(betSize, "Big value bet with monster");
+        double sizeMult = isWetBoard ? 0.66 : 0.75;
+        int64_t betSize = static_cast<int64_t>(pot * sizeMult);
+        return Decision::bet(betSize, std::format("Value bet with set ({} equity)", equityStr));
     }
 
+    // Two pair - medium value sizing
     if (hand.rank >= HandRank::TwoPair) {
-        int64_t betSize = getValueBetSize() * 0.7;
-        return Decision::bet(betSize, "Value bet with two pair+");
+        double sizeMult = isWetBoard ? 0.50 : 0.66;
+        int64_t betSize = static_cast<int64_t>(pot * sizeMult);
+        return Decision::bet(betSize, std::format("Value bet with two pair ({} equity)", equityStr));
     }
 
-    if (hand.rank >= HandRank::OnePair) {
-        int64_t betSize = getValueBetSize() * 0.5;
-        return Decision::bet(betSize, "Thin value with top pair");
+    // Top pair - size based on kicker strength and board
+    if (hand.rank == HandRank::OnePair) {
+        // Check if it's top pair with good kicker or not
+        std::string handDesc = HandEvaluator::describeHand(session_.heroCards(), session_.board());
+
+        if (handDesc.find("great kicker") != std::string::npos) {
+            // Top pair great kicker - can value bet larger
+            double sizeMult = isWetBoard ? 0.40 : 0.50;
+            int64_t betSize = static_cast<int64_t>(pot * sizeMult);
+            return Decision::bet(betSize, std::format("Value bet top pair great kicker ({} equity)", equityStr));
+        }
+        if (handDesc.find("good kicker") != std::string::npos) {
+            // Top pair good kicker - medium value bet
+            double sizeMult = isWetBoard ? 0.33 : 0.40;
+            int64_t betSize = static_cast<int64_t>(pot * sizeMult);
+            return Decision::bet(betSize, std::format("Medium value bet top pair good kicker ({} equity)", equityStr));
+        }
+        // Weak kicker or middle pair - very thin value or check
+        if (equity > 0.55) {
+            int64_t betSize = static_cast<int64_t>(pot * 0.25);
+            return Decision::bet(betSize, std::format("Thin value bet ({} equity)", equityStr));
+        }
+        return Decision::check(std::format("Check with marginal pair ({} equity). Showdown value.", equityStr));
     }
 
-    // Maybe bluff missed draw?
+    // Bluff with missed draw on favorable boards
     if (hand.rank <= HandRank::HighCard && session_.spr() > 2) {
-        int64_t betSize = getBluffSize();
-        return Decision::bet(betSize, "Bluff with missed draw. Represent something.");
+        // Only bluff on dry boards where our story makes sense
+        if (texture == BoardTexture::Dry) {
+            int64_t betSize = static_cast<int64_t>(pot * 0.50);
+            return Decision::bet(betSize, "Bluff with missed draw on dry board. Represent something.");
+        }
     }
 
-    return Decision::check("Check at showdown. Can't value bet weak hands");
+    return Decision::check(std::format("Check at showdown ({} equity). Can't value bet weak hands", equityStr));
 }
 
 double DecisionEngine::calculateEV(Action action, int64_t amount) {
